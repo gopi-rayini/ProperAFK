@@ -18,22 +18,8 @@ class BinaryReader {
         return value;
     }
 
-    peekUInt64() {
-        return this.buffer.readBigUInt64BE(this.offset);
-    }
-
     readUInt32() {
         const value = this.buffer.readUInt32BE(this.offset);
-        this.offset += 4;
-        return value;
-    }
-
-    peekUInt32() {
-        return this.buffer.readUInt32BE(this.offset);
-    }
-
-    readInt32() {
-        const value = this.buffer.readInt32BE(this.offset);
         this.offset += 4;
         return value;
     }
@@ -44,18 +30,22 @@ class BinaryReader {
         return value;
     }
 
-    peekInt32() {
-        return this.buffer.readInt32BE(this.offset);
-    }
-
     readUInt16() {
         const value = this.buffer.readUInt16BE(this.offset);
         this.offset += 2;
         return value;
     }
 
-    peekUInt16() {
-        return this.buffer.readUInt16BE(this.offset);
+    readInt32() {
+        const value = this.buffer.readInt32BE(this.offset);
+        this.offset += 4;
+        return value;
+    }
+
+    readFloat32() {
+        const value = this.buffer.readFloatBE(this.offset);
+        this.offset += 4;
+        return value;
     }
 
     readBytes(length) {
@@ -64,8 +54,8 @@ class BinaryReader {
         return value;
     }
 
-    peekBytes(length) {
-        return this.buffer.subarray(this.offset, this.offset + length);
+    peekUInt32() {
+        return this.buffer.readUInt32BE(this.offset);
     }
 
     remaining() {
@@ -73,9 +63,7 @@ class BinaryReader {
     }
 
     readRemaining() {
-        const value = this.buffer.subarray(this.offset);
-        this.offset = this.buffer.length;
-        return value;
+        return this.readBytes(this.remaining());
     }
 }
 
@@ -116,34 +104,20 @@ const AttrType = {
 };
 
 const ProfessionType = {
-    雷影剑士: 1,
-    冰魔导师: 2,
-    涤罪恶火_战斧: 3,
-    青岚骑士: 4,
-    森语者: 5,
-    雷霆一闪_手炮: 8,
-    巨刃守护者: 9,
-    暗灵祈舞_仪刀_仪仗: 10,
-    神射手: 11,
-    神盾骑士: 12,
-    灵魂乐手: 13,
+    雷影剑士: 21,
+    冰魔导师: 22,
+    涤罪恶火_战斧: 23,
+    涤罪恶火_战剑: 24,
+    核能射手: 25,
+    兽化斗士: 26,
 };
 
-const EDamageSource = {
-    EDamageSourceSkill: 0,
-    EDamageSourceBullet: 1,
-    EDamageSourceBuff: 2,
-    EDamageSourceFall: 3,
-    EDamageSourceFakeBullet: 4,
-    EDamageSourceOther: 100,
-};
-
-const EDamageProperty = {
-    General: 0,
+const ElementType = {
+    None: 0,
     Fire: 1,
-    Water: 2,
-    Electricity: 3,
-    Wood: 4,
+    Ice: 2,
+    Poison: 3,
+    Thunder: 4,
     Wind: 5,
     Rock: 6,
     Light: 7,
@@ -158,101 +132,70 @@ const getProfessionNameFromId = (professionId) => {
         case ProfessionType.冰魔导师:
             return '冰魔导师';
         case ProfessionType.涤罪恶火_战斧:
-            return '涤罪恶火·战斧';
-        case ProfessionType.青岚骑士:
-            return '青岚骑士';
-        case ProfessionType.森语者:
-            return '森语者';
-        case ProfessionType.雷霆一闪_手炮:
-            return '雷霆一闪·手炮';
-        case ProfessionType.巨刃守护者:
-            return '巨刃守护者';
-        case ProfessionType.暗灵祈舞_仪刀_仪仗:
-            return '暗灵祈舞·仪刀/仪仗';
-        case ProfessionType.神射手:
-            return '神射手';
-        case ProfessionType.神盾骑士:
-            return '神盾骑士';
-        case ProfessionType.灵魂乐手:
-            return '灵魂乐手';
+            return '涤罪恶火_战斧';
+        case ProfessionType.涤罪恶火_战剑:
+            return '涤罪恶火_战剑';
+        case ProfessionType.核能射手:
+            return '核能射手';
+        case ProfessionType.兽化斗士:
+            return '兽化斗士';
         default:
-            return '';
+            return '未知职业';
     }
 };
 
-const getDamageElement = (damageProperty) => {
-    switch (damageProperty) {
-        case EDamageProperty.General:
-            return '⚔️物';
-        case EDamageProperty.Fire:
-            return '🔥火';
-        case EDamageProperty.Water:
-            return '❄️冰';
-        case EDamageProperty.Electricity:
-            return '⚡雷';
-        case EDamageProperty.Wood:
-            return '🍀森';
-        case EDamageProperty.Wind:
-            return '💨风';
-        case EDamageProperty.Rock:
-            return '⛰️岩';
-        case EDamageProperty.Light:
-            return '🌟光';
-        case EDamageProperty.Dark:
-            return '🌑暗';
-        case EDamageProperty.Count:
-            return '❓？'; // 未知
-        default:
-            return '⚔️物';
-    }
-};
-
-const getDamageSource = (damageSource) => {
-    switch (damageSource) {
-        case EDamageSource.EDamageSourceSkill:
-            return 'Skill';
-        case EDamageSource.EDamageSourceBullet:
-            return 'Bullet';
-        case EDamageSource.EDamageSourceBuff:
-            return 'Buff';
-        case EDamageSource.EDamageSourceFall:
-            return 'Fall';
-        case EDamageSource.EDamageSourceFakeBullet:
-            return 'FBullet';
-        case EDamageSource.EDamageSourceOther:
-            return 'Other';
+const getDamageElement = (elementFlag) => {
+    switch (elementFlag) {
+        case 0:
+            return 'None';
+        case 1:
+            return 'Fire';
+        case 2:
+            return 'Ice';
+        case 3:
+            return 'Poison';
+        case 4:
+            return 'Thunder';
+        case 5:
+            return 'Wind';
+        case 6:
+            return 'Rock';
+        case 7:
+            return 'Light';
+        case 8:
+            return 'Dark';
         default:
             return 'Unknown';
     }
 };
 
-const isUuidPlayer = (uuid) => {
-    return (uuid.toBigInt() & 0xffffn) === 640n;
-};
+const cap = require('cap').Cap;
+const decoders = require('cap').decoders;
+const PROTOCOL = decoders.PROTOCOL;
 
-const isUuidMonster = (uuid) => {
-    return (uuid.toBigInt() & 0xffffn) === 64n;
-};
+let currentUserUuid = Long.ZERO;
 
-const doesStreamHaveIdentifier = (reader) => {
-    let identifier = reader.readUInt32LE();
-    reader.readInt32();
-    if (identifier !== 0xfffffffe) return false;
-    identifier = reader.readInt32();
-    reader.readInt32();
-    //if (identifier !== 0xfffffffd) return false;
-    return true;
-};
+function isUuidPlayer(uuid) {
+    if (!uuid) return false;
+    // from testing: player uuid has the last 16 bits as 0x0001
+    const low16 = uuid.and(Long.fromString('0xffff', true, 16)).toNumber();
+    return low16 === 1;
+}
 
-const streamReadString = (reader) => {
+function isUuidMonster(uuid) {
+    if (!uuid) return false;
+    // from testing: monster uuid has the last 16 bits as 0x0002
+    const low16 = uuid.and(Long.fromString('0xffff', true, 16)).toNumber();
+    return low16 === 2;
+}
+
+const ReadString = (reader) => {
     const length = reader.readUInt32LE();
     reader.readInt32();
     const buffer = reader.readBytes(length);
     reader.readInt32();
     return buffer.toString();
 };
-
-let currentUserUuid = Long.ZERO;
 
 class PacketProcessor {
     constructor({ logger, userDataManager }) {
@@ -265,38 +208,6 @@ class PacketProcessor {
             this.logger.warn('zstdDecompressSync is not available! Please check your Node.js version!');
             return;
         }
-    _processPossibleMove(payloadBuffer) {
-        // best-effort decode of movement messages
-        try {
-            if (pb.NewMove && pb.NewMove.decode) {
-                const m = pb.NewMove.decode(payloadBuffer);
-                if (m && m.Info && m.Info.CurPos) {
-                    const p = m.Info.CurPos;
-                    const uid = currentUserUuid.shiftRight(16).toNumber();
-                    this.userDataManager.setLocalPosition({
-                        uid, x: p.X ?? 0, y: p.Y ?? 0, z: p.Z ?? 0,
-                        dir: p.Dir ?? 0, moveVersion: m.Info.MoveVersion ?? 0
-                    });
-                    return;
-                }
-            }
-        } catch {}
-        try {
-            if (pb.UserControlInfo && pb.UserControlInfo.decode) {
-                const u = pb.UserControlInfo.decode(payloadBuffer);
-                if (u && u.CurPos) {
-                    const p = u.CurPos;
-                    const uid = currentUserUuid.shiftRight(16).toNumber();
-                    this.userDataManager.setLocalPosition({
-                        uid, x: p.X ?? 0, y: p.Y ?? 0, z: p.Z ?? 0,
-                        dir: p.Dir ?? 0, moveVersion: u.MoveVersion ?? 0
-                    });
-                    return;
-                }
-            }
-        } catch {}
-    }
-
         return zlib.zstdDecompressSync(buffer);
     }
 
@@ -318,148 +229,378 @@ class PacketProcessor {
             }
         }
 
-        const skillEffect = aoiSyncDelta.SkillEffects;
-        if (!skillEffect) return;
+        const damageEvents = aoiSyncDelta.DamageEvents;
+        if (damageEvents && damageEvents.Events) {
+            for (const syncDamageInfo of damageEvents.Events) {
+                if (!syncDamageInfo) continue;
 
-        if (!skillEffect.Damages) return;
-        for (const syncDamageInfo of skillEffect.Damages) {
-            const skillId = syncDamageInfo.OwnerId;
-            if (!skillId) continue;
+                const skillId = syncDamageInfo.OwnerId;
+                if (!skillId) continue;
 
-            let attackerUuid = syncDamageInfo.TopSummonerId || syncDamageInfo.AttackerUuid;
-            if (!attackerUuid) continue;
-            const isAttackerPlayer = isUuidPlayer(attackerUuid);
-            attackerUuid = attackerUuid.shiftRight(16);
+                let attackerUuid = syncDamageInfo.TopSummonerId || syncDamageInfo.AttackerUuid;
+                if (!attackerUuid) continue;
+                const isAttackerPlayer = isUuidPlayer(attackerUuid);
+                attackerUuid = attackerUuid.shiftRight(16);
 
-            const value = syncDamageInfo.Value;
-            const luckyValue = syncDamageInfo.LuckyValue;
-            const damage = value ?? luckyValue ?? Long.ZERO;
-            if (damage.isZero()) continue;
+                const value = syncDamageInfo.Value;
+                const luckyValue = syncDamageInfo.LuckyValue;
+                const damage = value ?? luckyValue ?? Long.ZERO;
+                if (damage.isZero()) continue;
 
-            // syncDamageInfo.IsCrit doesn't seem to be set by server, use typeFlag instead
-            // const isCrit = syncDamageInfo.IsCrit !== null ? syncDamageInfo.IsCrit : false;
+                // syncDamageInfo.IsCrit doesn't seem to be set by server, use typeFlag instead
+                // const isCrit = syncDamageInfo.IsCrit != null ? syncDamageInfo.IsCrit : false;
+                const isCrit = syncDamageInfo.TypeFlag != null ? (syncDamageInfo.TypeFlag & 1) === 1 : false;
 
-            // TODO: from testing, first bit is set when there's crit, 3rd bit for lucky, require more testing here
-            const isCrit = syncDamageInfo.TypeFlag != null ? (syncDamageInfo.TypeFlag & 1) === 1 : false;
-            const isCauseLucky = syncDamageInfo.TypeFlag != null ? (syncDamageInfo.TypeFlag & 0b100) === 0b100 : false;
+                // TODO: from testing, first bit is set when there's crit, 3rd bit for lucky, require more testing here
+                const isCauseLucky = syncDamageInfo.TypeFlag != null ? (syncDamageInfo.TypeFlag & 0b100) === 0b100 : false;
 
-            const isMiss = syncDamageInfo.IsMiss != null ? syncDamageInfo.IsMiss : false;
-            const isHeal = syncDamageInfo.Type === pb.EDamageType.Heal;
-            const isDead = syncDamageInfo.IsDead != null ? syncDamageInfo.IsDead : false;
-            const isLucky = !!luckyValue;
-            const hpLessenValue = syncDamageInfo.HpLessenValue != null ? syncDamageInfo.HpLessenValue : Long.ZERO;
-            const damageElement = getDamageElement(syncDamageInfo.Property);
-            const damageSource = syncDamageInfo.DamageSource ?? 0;
+                const isMiss = syncDamageInfo.IsMiss != null ? syncDamageInfo.IsMiss : false;
+                const isHeal = syncDamageInfo.Type === pb.EDamageType.Heal;
+                const isDead = syncDamageInfo.IsDead != null ? syncDamageInfo.IsDead : false;
+                const isLucky = !!luckyValue;
+                const hpLessenValue = syncDamageInfo.HpLessenValue != null ? syncDamageInfo.HpLessenValue : Long.ZERO;
+                const damageElement = getDamageElement(syncDamageInfo.Property);
+                const damageSource = syncDamageInfo.DamageSource ?? 0;
 
-            if (isTargetPlayer) {
-                //玩家目标
-                if (isHeal) {
-                    //玩家被治疗
-                    this.userDataManager.addHealing(
-                        isAttackerPlayer ? attackerUuid.toNumber() : 0,
-                        skillId,
-                        damageElement,
-                        damage.toNumber(),
-                        isCrit,
-                        isLucky,
-                        isCauseLucky,
-                        targetUuid.toNumber(),
-                    );
-                } else {
-                    //玩家受到伤害
-                    this.userDataManager.addTakenDamage(targetUuid.toNumber(), damage.toNumber(), isDead);
-                }
-                if (isDead) {
-                    this.userDataManager.setAttrKV(targetUuid.toNumber(), 'hp', 0);
-                }
-            } else {
-                //非玩家目标
-                if (isHeal) {
-                    //非玩家被治疗
-                } else {
-                    //非玩家受到伤害
+                if (isTargetPlayer) {
+                    //玩家目标
                     if (isAttackerPlayer) {
-                        //只记录玩家造成的伤害
-                        this.userDataManager.addDamage(
-                            attackerUuid.toNumber(),
-                            skillId,
-                            damageElement,
-                            damage.toNumber(),
+                        //玩家对玩家
+                        // ignore
+                    } else {
+                        // pve - 玩家被怪打
+                        this.userDataManager.processDamageToPlayer({
+                            playerUid: targetUuid.toNumber(),
+                            source: damageSource,
+                            value: damage.toNumber(),
+                            luckyValue: luckyValue?.toNumber?.() ?? 0,
                             isCrit,
-                            isLucky,
                             isCauseLucky,
-                            hpLessenValue.toNumber(),
-                            targetUuid.toNumber(),
-                        );
+                            isHeal,
+                            isMiss,
+                            isDead,
+                            isLucky,
+                            hpLessenValue: hpLessenValue?.toNumber?.() ?? 0,
+                            damageElement,
+                            skillId,
+                        });
                     }
+                } else if (isTargetMonster) {
+                    //怪物目标
+                    if (isAttackerPlayer) {
+                        //玩家对怪
+                        this.userDataManager.processPlayerDamage({
+                            attackerUid: attackerUuid.toNumber(),
+                            source: damageSource,
+                            value: damage.toNumber(),
+                            luckyValue: luckyValue?.toNumber?.() ?? 0,
+                            isCrit,
+                            isCauseLucky,
+                            isHeal,
+                            isMiss,
+                            isDead,
+                            isLucky,
+                            hpLessenValue: hpLessenValue?.toNumber?.() ?? 0,
+                            damageElement,
+                            skillId,
+                        });
+                    } else {
+                        //怪对怪, ignore
+                    }
+                } else {
+                    //未知目标, ignore
                 }
             }
+        }
+    }
 
-            let extra = [];
-            if (isCrit) extra.push('Crit');
-            if (isLucky) extra.push('Lucky');
-            if (isCauseLucky) extra.push('CauseLucky');
-            if (extra.length === 0) extra = ['Normal'];
+    _processPlayerAttrs(playerUid, attrs) {
+        if (!attrs) return;
 
-            const actionType = isHeal ? 'HEAL' : 'DMG';
-
-            let infoStr = `SRC: `;
-            if (isAttackerPlayer) {
-                const attacker = this.userDataManager.getUser(attackerUuid.toNumber());
-                if (attacker.name) {
-                    infoStr += attacker.name;
+        for (const attr of attrs) {
+            switch (attr.AttrId) {
+                case AttrType.AttrName: {
+                    if (!attr.AttrData) break;
+                    const reader = new BinaryReader(attr.AttrData);
+                    try {
+                        const name = ReadString(reader).trim();
+                        if (name) this.userDataManager.setName(playerUid, name);
+                    } catch (e) {}
+                    break;
                 }
-                infoStr += `#${attackerUuid.toString()}(player)`;
+                case AttrType.AttrProfessionId: {
+                    if (!attr.AttrData) break;
+                    const reader = new BinaryReader(attr.AttrData);
+                    try {
+                        const value = reader.readUInt32();
+                        const professionName = getProfessionNameFromId(value);
+                        this.userDataManager.setProfession(playerUid, professionName);
+                    } catch (e) {}
+                    break;
+                }
+                case AttrType.AttrFightPoint: {
+                    if (!attr.AttrData) break;
+                    const reader = new BinaryReader(attr.AttrData);
+                    try {
+                        const value = reader.readUInt32();
+                        this.userDataManager.setFightPoint(playerUid, value);
+                    } catch (e) {}
+                    break;
+                }
+                case AttrType.AttrLevel: {
+                    if (!attr.AttrData) break;
+                    const reader = new BinaryReader(attr.AttrData);
+                    try {
+                        const value = reader.readUInt32();
+                        this.userDataManager.setLevel(playerUid, value);
+                    } catch (e) {}
+                    break;
+                }
+                default:
+                    break;
+            }
+        }
+    }
+
+    _processEnemyAttrs(enemyUid, attrs) {
+        if (!attrs) return;
+
+        let name = 'Unknown';
+        let hp = 0;
+        let maxHp = 0;
+        let reductionLevel = 0;
+        let reductionId = 0;
+        let elementFlag = 0;
+
+        for (const attr of attrs) {
+            switch (attr.AttrId) {
+                case AttrType.AttrName: {
+                    if (!attr.AttrData) break;
+                    const reader = new BinaryReader(attr.AttrData);
+                    try {
+                        name = ReadString(reader).trim();
+                        if (name && monsterNames[name]) name = monsterNames[name];
+                        this.userDataManager.setEnemyName(enemyUid, name);
+                    } catch (e) {}
+                    break;
+                }
+                case AttrType.AttrId: {
+                    if (!attr.AttrData) break;
+                    const reader = new BinaryReader(attr.AttrData);
+                    try {
+                        const id = reader.readUInt32();
+                        this.userDataManager.setEnemyId(enemyUid, id);
+                    } catch (e) {}
+                    break;
+                }
+                case AttrType.AttrHp: {
+                    if (!attr.AttrData) break;
+                    const reader = new BinaryReader(attr.AttrData);
+                    try {
+                        hp = reader.readUInt32();
+                        this.userDataManager.setEnemyHp(enemyUid, hp);
+                    } catch (e) {}
+                    break;
+                }
+                case AttrType.AttrMaxHp: {
+                    if (!attr.AttrData) break;
+                    const reader = new BinaryReader(attr.AttrData);
+                    try {
+                        maxHp = reader.readUInt32();
+                        this.userDataManager.setEnemyMaxHp(enemyUid, maxHp);
+                    } catch (e) {}
+                    break;
+                }
+                case AttrType.AttrReductionLevel: {
+                    if (!attr.AttrData) break;
+                    const reader = new BinaryReader(attr.AttrData);
+                    try {
+                        reductionLevel = reader.readUInt32();
+                        this.userDataManager.setEnemyReductionLevel(enemyUid, reductionLevel);
+                    } catch (e) {}
+                    break;
+                }
+                case AttrType.AttrReduntionId: {
+                    if (!attr.AttrData) break;
+                    const reader = new BinaryReader(attr.AttrData);
+                    try {
+                        reductionId = reader.readUInt32();
+                        this.userDataManager.setEnemyReductionId(enemyUid, reductionId);
+                    } catch (e) {}
+                    break;
+                }
+                case AttrType.AttrElementFlag: {
+                    if (!attr.AttrData) break;
+                    const reader = new BinaryReader(attr.AttrData);
+                    try {
+                        elementFlag = reader.readUInt32();
+                        this.userDataManager.setEnemyElement(enemyUid, getDamageElement(elementFlag));
+                    } catch (e) {}
+                    break;
+                }
+                default:
+                    break;
+            }
+        }
+
+        if (name !== 'Unknown' && maxHp > 0) {
+            this.userDataManager.addEnemy(enemyUid, { name, hp, maxHp, reductionLevel, reductionId, elementFlag });
+        }
+    }
+
+    _processSyncContainerData(payloadBuffer) {
+        const syncContainerData = pb.SyncContainerData.decode(payloadBuffer);
+        // this.logger.debug(JSON.stringify(syncContainerData, null, 2));
+
+        if (!syncContainerData.Uuid) return;
+
+        const entityInfo = syncContainerData.Entity;
+        if (!entityInfo) return;
+
+        let playerUid = syncContainerData.Uuid.shiftRight(16);
+        if (isUuidPlayer(syncContainerData.Uuid)) {
+            // jugador
+            const container = entityInfo.Container;
+            if (!container) return;
+
+            if (!container.CharBaseData) return;
+            const vData = container.CharBaseData;
+            if (!vData.CharBase) return;
+            const charBase = vData.CharBase;
+
+            if (charBase.Name) {
+                this.logger.debug(`_processSyncContainerData: Setting player name for UID ${playerUid}: ${charBase.Name}`);
+                this.userDataManager.setName(playerUid, charBase.Name);
+            }
+
+            if (charBase.FightPoint) this.userDataManager.setFightPoint(playerUid, charBase.FightPoint);
+
+            if (!vData.ProfessionList) return;
+            const professionList = vData.ProfessionList;
+            if (professionList.CurProfessionId) {
+                const professionName = getProfessionNameFromId(professionList.CurProfessionId);
+                this.logger.debug(`_processSyncContainerData: Setting player profession for UID ${playerUid}: ${professionName}`);
+                this.userDataManager.setProfession(playerUid, professionName);
+            }
+        } else if (isUuidMonster(syncContainerData.Uuid)) {
+            // monster
+            const container = entityInfo.Container;
+            if (!container) return;
+
+            if (!container.MonsterBaseData) return;
+            const vData = container.MonsterBaseData;
+            if (!vData.MonsterBase) return;
+            const monsterBase = vData.MonsterBase;
+
+            if (monsterBase.Id) this.userDataManager.setEnemyId(playerUid.toNumber(), monsterBase.Id);
+        } else {
+            // ignore other entities
+        }
+    }
+
+    _processSyncContainerDirtyData(payloadBuffer) {
+        const syncContainerDirtyData = pb.SyncContainerDirtyData.decode(payloadBuffer);
+        // this.logger.debug(JSON.stringify(syncContainerDirtyData, null, 2));
+
+        if (!syncContainerDirtyData.Uuid) return;
+
+        const entityInfo = syncContainerDirtyData.Entity;
+        if (!entityInfo) return;
+
+        let playerUid = syncContainerDirtyData.Uuid.shiftRight(16);
+        if (isUuidPlayer(syncContainerDirtyData.Uuid)) {
+            // jugador
+            const container = entityInfo.Container;
+            if (!container) return;
+
+            const attrCollection = container.Attrs;
+            if (attrCollection && attrCollection.Attrs) {
+                this._processPlayerAttrs(playerUid.toNumber(), attrCollection.Attrs);
+            }
+        } else if (isUuidMonster(syncContainerDirtyData.Uuid)) {
+            // monstruo
+            const container = entityInfo.Container;
+            if (!container) return;
+
+            const attrCollection = container.Attrs;
+            if (attrCollection && attrCollection.Attrs) {
+                this._processEnemyAttrs(playerUid.toNumber(), attrCollection.Attrs);
+            }
+        } else {
+            // otros
+        }
+    }
+
+    _processSyncNearEntities(payloadBuffer) {
+        const syncNearEntities = pb.SyncNearEntities.decode(payloadBuffer);
+        // this.logger.debug(JSON.stringify(syncNearEntities, null, 2));
+        const entities = syncNearEntities.Entities;
+        if (!entities) return;
+
+        for (const entity of entities) {
+            const uuid = entity.Uuid;
+            if (uuid && !currentUserUuid.eq(uuid)) {
+                currentUserUuid = uuid;
+                this.logger.info('Got player UUID! UUID: ' + currentUserUuid + ' UID: ' + currentUserUuid.shiftRight(16));
+            }
+
+            if (!entity.Entity) continue;
+            const entityInfo = entity.Entity;
+            const container = entityInfo.Container;
+            if (!container) continue;
+
+            if (isUuidPlayer(uuid)) {
+                const vData = container.CharBaseData;
+                if (!vData || !vData.CharBase) continue;
+                const charBase = vData.CharBase;
+
+                if (charBase.Name) {
+                    this.logger.debug(`_processSyncNearEntities: Setting player name for UID ${uuid.shiftRight(16)}: ${charBase.Name}`);
+                    this.userDataManager.setName(uuid.shiftRight(16).toNumber(), charBase.Name);
+                }
+
+                if (charBase.FightPoint) {
+                    this.userDataManager.setFightPoint(uuid.shiftRight(16).toNumber(), charBase.FightPoint);
+                }
+
+                if (vData.ProfessionList && vData.ProfessionList.CurProfessionId) {
+                    const professionName = getProfessionNameFromId(vData.ProfessionList.CurProfessionId);
+                    this.logger.debug(`_processSyncNearEntities: Setting player profession for UID ${uuid.shiftRight(16)}: ${professionName}`);
+                    this.userDataManager.setProfession(uuid.shiftRight(16).toNumber(), professionName);
+                }
+            } else if (isUuidMonster(uuid)) {
+                const vData = container.MonsterBaseData;
+                if (!vData || !vData.MonsterBase) continue;
+                const monsterBase = vData.MonsterBase;
+
+                if (monsterBase.Id) {
+                    this.userDataManager.setEnemyId(uuid.shiftRight(16).toNumber(), monsterBase.Id);
+                }
             } else {
-                if (this.userDataManager.enemyCache.name.has(attackerUuid.toNumber())) {
-                    infoStr += this.userDataManager.enemyCache.name.get(attackerUuid.toNumber());
-                }
-                infoStr += `#${attackerUuid.toString()}(enemy)`;
+                // ignore
             }
-
-            let targetName = '';
-            if (isTargetPlayer) {
-                const target = this.userDataManager.getUser(targetUuid.toNumber());
-                if (target.name) {
-                    targetName += target.name;
-                }
-                targetName += `#${targetUuid.toString()}(player)`;
-            } else {
-                if (this.userDataManager.enemyCache.name.has(targetUuid.toNumber())) {
-                    targetName += this.userDataManager.enemyCache.name.get(targetUuid.toNumber());
-                }
-                targetName += `#${targetUuid.toString()}(enemy)`;
-            }
-            infoStr += ` TGT: ${targetName}`;
-
-            const dmgLogArr = [
-                `[${actionType}]`,
-                `DS: ${getDamageSource(damageSource)}`,
-                infoStr,
-                `ID: ${skillId}`,
-                `VAL: ${damage}`,
-                `HPLSN: ${hpLessenValue}`,
-                `ELEM: ${damageElement.slice(-1)}`,
-                `EXT: ${extra.join('|')}`,
-            ];
-            const dmgLog = dmgLogArr.join(' ');
-            this.logger.info(dmgLog);
-            this.userDataManager.addLog(dmgLog);
         }
     }
 
     _processSyncServerTime(payloadBuffer) {
-        // SyncServerTime - no necesitamos procesar nada especial aquí
-        // Se mantenía para compatibilidad con el switch case
+        const syncServerTime = pb.SyncServerTime.decode(payloadBuffer);
+        // this.logger.debug(JSON.stringify(syncServerTime, null, 2));
+
+        const deltaInfo = syncServerTime.DeltaInfo;
+        if (!deltaInfo) return;
+
+        this._processAoiSyncDelta(deltaInfo);
     }
 
     _processSyncNearDeltaInfo(payloadBuffer) {
         const syncNearDeltaInfo = pb.SyncNearDeltaInfo.decode(payloadBuffer);
         // this.logger.debug(JSON.stringify(syncNearDeltaInfo, null, 2));
 
-        if (!syncNearDeltaInfo.DeltaInfos) return;
-        for (const aoiSyncDelta of syncNearDeltaInfo.DeltaInfos) {
-            this._processAoiSyncDelta(aoiSyncDelta);
+        const deltas = syncNearDeltaInfo.DeltaInfos;
+        if (!deltas) return;
+
+        for (const delta of deltas) {
+            this._processAoiSyncDelta(delta);
         }
     }
 
@@ -479,259 +620,6 @@ class PacketProcessor {
         if (!aoiSyncDelta) return;
 
         this._processAoiSyncDelta(aoiSyncDelta);
-    }
-
-    _processSyncContainerData(payloadBuffer) {
-        // for some reason protobufjs doesn't work here, we use google-protobuf instead
-        try {
-            const syncContainerData = pb.SyncContainerData.decode(payloadBuffer);
-            // this.logger.debug(JSON.stringify(syncContainerData, null, 2));
-            // fs.writeFileSync('SyncContainerData.json', JSON.stringify(syncContainerData, null, 2));
-
-            if (!syncContainerData.VData) return;
-            const vData = syncContainerData.VData;
-
-            if (!vData.CharId) return;
-            const playerUid = vData.CharId.toNumber();
-
-            if (vData.RoleLevel && vData.RoleLevel.Level) this.userDataManager.setAttrKV(playerUid, 'level', vData.RoleLevel.Level);
-
-            if (vData.Attr && vData.Attr.CurHp) this.userDataManager.setAttrKV(playerUid, 'hp', vData.Attr.CurHp.toNumber());
-
-            if (vData.Attr && vData.Attr.MaxHp) this.userDataManager.setAttrKV(playerUid, 'max_hp', vData.Attr.MaxHp.toNumber());
-
-            if (!vData.CharBase) return;
-            const charBase = vData.CharBase;
-
-            if (charBase.Name) {
-                this.logger.debug(`_processSyncContainerData: Setting player name for UID ${playerUid}: ${charBase.Name}`);
-                this.userDataManager.setName(playerUid, charBase.Name);
-            }
-
-            if (charBase.FightPoint) this.userDataManager.setFightPoint(playerUid, charBase.FightPoint);
-
-            if (!vData.ProfessionList) return;
-            const professionList = vData.ProfessionList;
-            if (professionList.CurProfessionId) {
-                const professionName = getProfessionNameFromId(professionList.CurProfessionId);
-                this.logger.debug(`_processSyncContainerData: Setting profession for UID ${playerUid}: ${professionName}`);
-                this.userDataManager.setProfession(playerUid, professionName);
-            }
-        } catch (err) {
-            fs.writeFileSync('./SyncContainerData.dat', payloadBuffer);
-            this.logger.warn(`Failed to decode SyncContainerData for player ${currentUserUuid.shiftRight(16)}. Please report to developer`);
-            throw err;
-        }
-    }
-
-    _processSyncContainerDirtyData(payloadBuffer) {
-        if (currentUserUuid.isZero()) return;
-
-        const syncContainerDirtyData = pb.SyncContainerDirtyData.decode(payloadBuffer);
-        if (!syncContainerDirtyData.VData || !syncContainerDirtyData.VData.Buffer) return;
-        this.logger.debug(syncContainerDirtyData.VData.Buffer.toString('hex'));
-        const messageReader = new BinaryReader(Buffer.from(syncContainerDirtyData.VData.Buffer));
-
-        if (!doesStreamHaveIdentifier(messageReader)) return;
-
-        let fieldIndex = messageReader.readUInt32LE();
-        messageReader.readInt32();
-        switch (fieldIndex) {
-            case 2: // CharBase
-                if (!doesStreamHaveIdentifier(messageReader)) break;
-
-                fieldIndex = messageReader.readUInt32LE();
-                messageReader.readInt32();
-                switch (fieldIndex) {
-                    case 5: // Name
-                        const playerName = streamReadString(messageReader);
-                        if (!playerName || playerName === '') break;
-                        this.userDataManager.setName(currentUserUuid.shiftRight(16).toNumber(), playerName);
-                        break;
-                    case 35: // FightPoint
-                        const fightPoint = messageReader.readUInt32LE();
-                        messageReader.readInt32();
-                        this.userDataManager.setFightPoint(currentUserUuid.shiftRight(16).toNumber(), fightPoint);
-                        break;
-                    default:
-                        // unhandle
-                        break;
-                }
-                break;
-            case 16: // UserFightAttr
-                if (!doesStreamHaveIdentifier(messageReader)) break;
-
-                fieldIndex = messageReader.readUInt32LE();
-                messageReader.readInt32();
-                switch (fieldIndex) {
-                    case 1: // CurHp
-                        const curHp = messageReader.readUInt32LE();
-                        this.userDataManager.setAttrKV(currentUserUuid.shiftRight(16).toNumber(), 'hp', curHp);
-                        break;
-                    case 2: // MaxHp
-                        const maxHp = messageReader.readUInt32LE();
-                        this.userDataManager.setAttrKV(currentUserUuid.shiftRight(16).toNumber(), 'max_hp', maxHp);
-                        break;
-                    default:
-                        // unhandle
-                        break;
-                }
-                break;
-            case 61: // ProfessionList
-                if (!doesStreamHaveIdentifier(messageReader)) break;
-
-                fieldIndex = messageReader.readUInt32LE();
-                messageReader.readInt32();
-                switch (fieldIndex) {
-                    case 1: // CurProfessionId
-                        const curProfessionId = messageReader.readUInt32LE();
-                        messageReader.readInt32();
-                        if (curProfessionId)
-                            this.userDataManager.setProfession(currentUserUuid.shiftRight(16).toNumber(), getProfessionNameFromId(curProfessionId));
-                        break;
-                    default:
-                        // unhandle
-                        break;
-                }
-                break;
-            default:
-                // unhandle
-                break;
-        }
-
-        // this.logger.debug(syncContainerDirtyData.VData.Buffer.toString('hex'));
-    }
-
-    _processPlayerAttrs(playerUid, attrs) {
-        for (const attr of attrs) {
-            if (!attr.Id || !attr.RawData) continue;
-            const reader = pbjs.Reader.create(attr.RawData);
-
-            switch (attr.Id) {
-                case AttrType.AttrName:
-                    const playerName = reader.string();
-                    this.logger.debug(`_processPlayerAttrs: Setting player name for UID ${playerUid}: ${playerName}`);
-                    this.userDataManager.setName(playerUid, playerName);
-                    break;
-                case AttrType.AttrProfessionId:
-                    const professionId = reader.int32();
-                    const professionName = getProfessionNameFromId(professionId);
-                    this.logger.debug(`_processPlayerAttrs: Setting profession for UID ${playerUid}: ${professionName}`);
-                    this.userDataManager.setProfession(playerUid, professionName);
-                    break;
-                case AttrType.AttrFightPoint:
-                    const playerFightPoint = reader.int32();
-                    this.userDataManager.setFightPoint(playerUid, playerFightPoint);
-                    break;
-                case AttrType.AttrLevel:
-                    const playerLevel = reader.int32();
-                    this.userDataManager.setAttrKV(playerUid, 'level', playerLevel);
-                    break;
-                case AttrType.AttrRankLevel:
-                    const playerRankLevel = reader.int32();
-                    this.userDataManager.setAttrKV(playerUid, 'rank_level', playerRankLevel);
-                    break;
-                case AttrType.AttrCri:
-                    const playerCri = reader.int32();
-                    this.userDataManager.setAttrKV(playerUid, 'cri', playerCri);
-                    break;
-                case AttrType.AttrLucky:
-                    const playerLucky = reader.int32();
-                    this.userDataManager.setAttrKV(playerUid, 'lucky', playerLucky);
-                    break;
-                case AttrType.AttrHp:
-                    const playerHp = reader.int32();
-                    this.userDataManager.setAttrKV(playerUid, 'hp', playerHp);
-                    break;
-                case AttrType.AttrMaxHp:
-                    const playerMaxHp = reader.int32();
-                    this.userDataManager.setAttrKV(playerUid, 'max_hp', playerMaxHp);
-                    break;
-                case AttrType.AttrElementFlag:
-                    const playerElementFlag = reader.int32();
-                    this.userDataManager.setAttrKV(playerUid, 'element_flag', playerElementFlag);
-                    break;
-                case AttrType.AttrEnergyFlag:
-                    const playerEnergyFlag = reader.int32();
-                    this.userDataManager.setAttrKV(playerUid, 'energy_flag', playerEnergyFlag);
-                    break;
-                case AttrType.AttrReductionLevel:
-                    const playerReductionLevel = reader.int32();
-                    this.userDataManager.setAttrKV(playerUid, 'reduction_level', playerReductionLevel);
-                    break;
-                default:
-                    // this.logger.debug(`Found unknown attrId ${attr.Id} for ${playerUid} ${attr.RawData.toString('base64')}`);
-                    break;
-            }
-        }
-    }
-
-    _processEnemyAttrs(enemyUid, attrs) {
-        for (const attr of attrs) {
-            if (!attr.Id || !attr.RawData) continue;
-            const reader = pbjs.Reader.create(attr.RawData);
-            this.logger.debug(`Found attrId ${attr.Id} for E${enemyUid} ${attr.RawData.toString('base64')}`);
-            switch (attr.Id) {
-                case AttrType.AttrName:
-                    const enemyName = reader.string();
-                    this.userDataManager.enemyCache.name.set(enemyUid, enemyName);
-                    this.logger.info(`Found monster name ${enemyName} for id ${enemyUid}`);
-                    break;
-                case AttrType.AttrId:
-                    const attrId = reader.int32();
-                    const name = monsterNames[attrId];
-                    if (name) {
-                        this.logger.info(`Found moster name ${name} for id ${enemyUid}`);
-                        this.userDataManager.enemyCache.name.set(enemyUid, name);
-                    }
-                    break;
-                case AttrType.AttrHp:
-                    const enemyHp = reader.int32();
-                    this.userDataManager.enemyCache.hp.set(enemyUid, enemyHp);
-                    break;
-                case AttrType.AttrMaxHp:
-                    const enemyMaxHp = reader.int32();
-                    this.userDataManager.enemyCache.maxHp.set(enemyUid, enemyMaxHp);
-                    break;
-                default:
-                    // this.logger.debug(`Found unknown attrId ${attr.Id} for E${enemyUid} ${attr.RawData.toString('base64')}`);
-                    break;
-            }
-        }
-    }
-
-    _processSyncNearEntities(payloadBuffer) {
-        const syncNearEntities = pb.SyncNearEntities.decode(payloadBuffer);
-        // this.logger.debug(JSON.stringify(syncNearEntities, null, 2));
-
-        if (!syncNearEntities.Appear) return;
-        
-        // Actualizar el UID del jugador local en el data manager
-        const localPlayerUid = currentUserUuid.shiftRight(16).toNumber();
-        if (this.userDataManager && localPlayerUid > 0) {
-            this.userDataManager.setLocalPlayerUid(localPlayerUid);
-        }
-
-        for (const entity of syncNearEntities.Appear) {
-            const entityUuid = entity.Uuid;
-            if (!entityUuid) continue;
-            const entityUid = entityUuid.shiftRight(16).toNumber();
-            const attrCollection = entity.Attrs;
-
-            if (attrCollection && attrCollection.Attrs) {
-                switch (entity.EntType) {
-                    case pb.EEntityType.EntMonster:
-                        this._processEnemyAttrs(entityUid, attrCollection.Attrs);
-                        break;
-                    case pb.EEntityType.EntChar:
-                        this._processPlayerAttrs(entityUid, attrCollection.Attrs);
-                        break;
-                    default:
-                        // this.logger.debug('Get AttrCollection for Unknown EntType' + entity.EntType);
-                        break;
-                }
-            }
-        }
     }
 
     _processNotifyMsg(reader, isZstdCompressed) {
@@ -769,14 +657,9 @@ class PacketProcessor {
                 this._processSyncNearDeltaInfo(msgPayload);
                 break;
             default:
-                // Ignorar method IDs desconocidos silenciosamente
-                this.logger.debug(`Skipping NotifyMsg with methodId ${methodId}`);
-                break;
-            default:
-                // opportunistic movement decode
+                // Try to opportunistically decode movement packets
                 this._processPossibleMove(msgPayload);
                 break;
-
         }
         return;
     }
@@ -809,17 +692,24 @@ class PacketProcessor {
                     case MessageType.Return:
                         this._processReturnMsg(packetReader, isZstdCompressed);
                         break;
+                    case MessageType.Call:
+                    case MessageType.Echo:
                     case MessageType.FrameDown:
-                        const serverSequenceId = packetReader.readUInt32();
-                        if (packetReader.remaining() == 0) break;
-
+                    case MessageType.FrameUp:
+                        // nested packet
                         let nestedPacket = packetReader.readRemaining();
 
-                        if (isZstdCompressed) {
-                            nestedPacket = this._decompressPayload(nestedPacket);
+                        // decompress if the packet is compressed
+                        const nestedReader = new BinaryReader(nestedPacket);
+                        const nestedPacketSize = nestedReader.readUInt32();
+                        const nestedPacketType = nestedReader.readUInt16();
+                        const isNestedZstdCompressed = nestedPacketType & 0x8000;
+                        if (isNestedZstdCompressed) {
+                            nestedPacket = this._decompressPayload(nestedReader.readRemaining());
+                        } else {
+                            nestedPacket = nestedReader.readRemaining();
                         }
 
-                        // this.logger.debug("Processing FrameDown packet.");
                         this.processPacket(nestedPacket);
                         break;
                     default:
@@ -832,5 +722,45 @@ class PacketProcessor {
         }
     }
 }
+
+// ---- movement helper (appended safely) ----
+PacketProcessor.prototype._processPossibleMove = function (payloadBuffer) {
+    try {
+        if (pb.NewMove && pb.NewMove.decode) {
+            const m = pb.NewMove.decode(payloadBuffer);
+            if (m && m.Info && m.Info.CurPos) {
+                const p = m.Info.CurPos;
+                const uid = currentUserUuid.shiftRight(16).toNumber();
+                this.userDataManager.setLocalPosition({
+                    uid,
+                    x: p.X ?? 0,
+                    y: p.Y ?? 0,
+                    z: p.Z ?? 0,
+                    dir: p.Dir ?? 0,
+                    moveVersion: m.Info.MoveVersion ?? 0,
+                });
+                return;
+            }
+        }
+    } catch (e) {}
+    try {
+        if (pb.UserControlInfo && pb.UserControlInfo.decode) {
+            const u = pb.UserControlInfo.decode(payloadBuffer);
+            if (u && u.CurPos) {
+                const p = u.CurPos;
+                const uid = currentUserUuid.shiftRight(16).toNumber();
+                this.userDataManager.setLocalPosition({
+                    uid,
+                    x: p.X ?? 0,
+                    y: p.Y ?? 0,
+                    z: p.Z ?? 0,
+                    dir: p.Dir ?? 0,
+                    moveVersion: u.MoveVersion ?? 0,
+                });
+                return;
+            }
+        }
+    } catch (e) {}
+};
 
 module.exports = PacketProcessor;
