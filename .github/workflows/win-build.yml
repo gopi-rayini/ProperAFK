@@ -29,14 +29,26 @@ jobs:
         shell: powershell
         run: |
           $ErrorActionPreference = 'Stop'
-          $url = "https://nmap.org/npcap/dist/npcap-sdk-1.13.zip"
-          $zip = "$env:RUNNER_TEMP\npcap.zip"
-          Invoke-WebRequest $url -OutFile $zip
-          Expand-Archive -Path $zip -DestinationPath C:\ -Force
-          if (Test-Path "C:\npcap-sdk") { Remove-Item -Recurse -Force "C:\npcap-sdk" }
-          Rename-Item "C:\npcap-sdk-1.13" "C:\npcap-sdk"
-          Add-Content -Path $env:GITHUB_ENV -Value "INCLUDE=$env:NPCAP_DIR\Include;$env:INCLUDE"
-          Add-Content -Path $env:GITHUB_ENV -Value "LIB=$env:NPCAP_DIR\Lib\x64;$env:LIB"
+          $url  = 'https://nmap.org/npcap/dist/npcap-sdk-1.13.zip'
+          $zip  = "$env:RUNNER_TEMP\npcap.zip"
+          Invoke-WebRequest -Uri $url -OutFile $zip
+          Expand-Archive -Path $zip -DestinationPath $env:RUNNER_TEMP -Force
+          
+          # find whatever folder name was inside the zip (e.g., npcap-sdk-1.13, 1.14, etc.)
+          $folder = Get-ChildItem $env:RUNNER_TEMP -Directory |
+                    Where-Object { $_.Name -like 'npcap-sdk*' } |
+                    Select-Object -First 1
+          if (-not $folder) {
+            Write-Host "DEBUG listing:"; Get-ChildItem $env:RUNNER_TEMP -Recurse
+            throw "Npcap SDK folder not found after unzip."
+          }
+          
+          if (Test-Path 'C:\npcap-sdk') { Remove-Item -Recurse -Force 'C:\npcap-sdk' }
+          Move-Item $folder.FullName 'C:\npcap-sdk'
+          
+          Add-Content -Path $env:GITHUB_ENV -Value "INCLUDE=C:\npcap-sdk\Include;$env:INCLUDE"
+          Add-Content -Path $env:GITHUB_ENV -Value "LIB=C:\npcap-sdk\Lib\x64;$env:LIB"
+
 
       - name: Configure node-gyp
         shell: powershell
