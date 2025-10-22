@@ -1,5 +1,6 @@
 name: Win EXE
-on: workflow_dispatch
+on:
+  workflow_dispatch:
 
 jobs:
   build:
@@ -9,33 +10,49 @@ jobs:
       PYTHON_VERSION: '3.10'
       NPCAP_DIR: 'C:\npcap-sdk'
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
-        with: { node-version: ${{ env.NODE_VERSION }} }
-      - uses: actions/setup-python@v5
-        with: { python-version: ${{ env.PYTHON_VERSION }} }
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+
+      - name: Setup Python
+        id: py
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+
       - name: Install Npcap SDK
         shell: powershell
         run: |
+          $ErrorActionPreference = 'Stop'
           $url = "https://nmap.org/npcap/dist/npcap-sdk-1.13.zip"
           $zip = "$env:RUNNER_TEMP\npcap.zip"
           Invoke-WebRequest $url -OutFile $zip
-          Expand-Archive $zip -DestinationPath C:\ -Force
+          Expand-Archive -Path $zip -DestinationPath C:\ -Force
+          if (Test-Path "C:\npcap-sdk") { Remove-Item -Recurse -Force "C:\npcap-sdk" }
           Rename-Item "C:\npcap-sdk-1.13" "C:\npcap-sdk"
-          echo "INCLUDE=$env:NPCAP_DIR\Include;$env:INCLUDE" >> $env:GITHUB_ENV
-          echo "LIB=$env:NPCAP_DIR\Lib\x64;$env:LIB"       >> $env:GITHUB_ENV
+          Add-Content -Path $env:GITHUB_ENV -Value "INCLUDE=$env:NPCAP_DIR\Include;$env:INCLUDE"
+          Add-Content -Path $env:GITHUB_ENV -Value "LIB=$env:NPCAP_DIR\Lib\x64;$env:LIB"
+
       - name: Configure node-gyp
+        shell: powershell
         run: |
-          echo msvs_version=2022>> %USERPROFILE%\.npmrc
-          echo python=${{ steps.setup-python.outputs.python-path }}>> %USERPROFILE%\.npmrc
+          Add-Content -Path "$env:USERPROFILE\.npmrc" -Value "msvs_version=2022"
+          Add-Content -Path "$env:USERPROFILE\.npmrc" -Value "python=${{ steps.py.outputs.python-path }}"
+
       - name: Install deps
         run: npm ci
+
       - name: Build EXE
         run: npm run dist
+
       - name: Upload artifacts
         uses: actions/upload-artifact@v4
         with:
           name: bpsr-meter-win
           path: |
-            dist/*.exe
+            dist/**/*.exe
             dist/win-unpacked/**
