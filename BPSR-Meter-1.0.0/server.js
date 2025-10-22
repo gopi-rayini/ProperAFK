@@ -1,4 +1,6 @@
+// server.js
 const path = require('path');
+const os = require('os');
 const fs = require('fs');
 const fsPromises = fs.promises;
 const express = require('express');
@@ -10,11 +12,23 @@ const zlib = require('zlib');
 
 const { UserDataManager } = require(path.join(__dirname, 'src', 'server', 'dataManager'));
 const Sniffer = require(path.join(__dirname, 'src', 'server', 'sniffer'));
-const initializeApi = require(path.join(__dirname, 'src', 'server', 'api'));
+const initializeApi = (() => {
+  try { return require(path.join(__dirname, 'src', 'server', 'api')); }
+  catch { return () => {}; }
+})();
 const PacketProcessor = require(path.join(__dirname, 'algo', 'packet'));
 
-const VERSION = '3.1';
-const SETTINGS_PATH = path.join(__dirname, 'settings.json');
+// writable settings location (never inside app.asar)
+function getSettingsPath() {
+  const base =
+    process.env.APPDATA ||
+    process.env.LOCALAPPDATA ||
+    path.join(os.homedir(), 'AppData', 'Roaming');
+  const dir = path.join(base, 'bpsr-meter');
+  fs.mkdirSync(dir, { recursive: true });
+  return path.join(dir, 'settings.json');
+}
+const SETTINGS_PATH = getSettingsPath();
 
 let globalSettings = {
   autoClearOnServerChange: true,
@@ -30,24 +44,19 @@ let globalSettings = {
 async function loadSettings() {
   try {
     if (fs.existsSync(SETTINGS_PATH)) {
-      const raw = await fsPromises.readFile(SETTINGS_PATH, 'utf8');
-      Object.assign(globalSettings, JSON.parse(raw) || {});
+      Object.assign(globalSettings, JSON.parse(await fsPromises.readFile(SETTINGS_PATH, 'utf8')) || {});
     }
-  } catch (e) {
-    console.log('settings.json load failed:', e.message);
-  }
+  } catch (_) {}
 }
-
 async function saveSettings() {
   try {
     await fsPromises.writeFile(SETTINGS_PATH, JSON.stringify(globalSettings, null, 2), 'utf8');
-  } catch (e) {
-    console.log('settings.json save failed:', e.message);
-  }
+  } catch (_) {}
 }
 
+// winston logger + guaranteed API shape
 function makeLogger() {
-  return winston.createLogger({
+  const base = winston.createLogger({
     level: 'info',
     format: winston.format.combine(
       winston.format.colorize({ all: true }),
@@ -56,62 +65,48 @@ function makeLogger() {
     ),
     transports: [new winston.transports.Console()]
   });
-}
-
-// provide .info/.warn/.error/.debug always
-function normalizeLogger(lg) {
   const noop = () => {};
   return {
-    info:  (lg && lg.info)  ? lg.info.bind(lg)  : console.log.bind(console),
-    warn:  (lg && lg.warn)  ? lg.warn.bind(lg)  : console.warn.bind(console),
-    error: (lg && lg.error) ? lg.error.bind(lg) : console.error.bind(console),
-    debug: (lg && lg.debug) ? lg.debug.bind(lg) : noop
+    info:  (...a) => base.info(...a),
+    warn:  (...a) => base.warn(...a),
+    error: (...a) => base.error(...a),
+    debug: (...a) => (base.debug ? base.debug(...a) : noop())
   };
 }
 
-async function main() {
-  if (!zlib.zstdDecompressSync) {
-    console.log('zstdDecompressSync missing. Update Node/Electron.');
-    process.exit(1);
-  }
-
+(async function main() {
   await loadSettings();
 
   const app = express();
   const server = http.createServer(app);
   const io = new Server(server, { cors: { origin: '*', methods: ['GET','POST'] } });
-  app.use(express.static(path.join(__dirname, 'public')));
+
   app.use(express.json());
+  app.use(express.static(path.join(__dirname, 'public'))); // serves /adapter.html
 
   const logger = makeLogger();
-  const snifferLogger = normalizeLogger(logger);
 
-  // User data manager + ensure settings + position helpers
+  // user data manager
   const userDataManager = new UserDataManager(logger);
-  userDataManager.globalSettings = userDataManager.globalSettings || globalSettings; // inject so checkTimeoutClear works
-  const nowMs = () => Date.now();
+  userDataManager.globalSettings = userDataManager.globalSettings || globalSettings;
   if (typeof userDataManager.setLocalPosition !== 'function') {
-    userDataManager.setLocalPosition = function(pos){ this.localPosition = { ...pos, ts: nowMs() }; };
+    userDataManager.setLocalPosition = function(pos){ this.localPosition = { ...pos, ts: Date.now() }; };
   }
   if (typeof userDataManager.getLocalPosition !== 'function') {
     userDataManager.getLocalPosition = function(){ return this.localPosition || null; };
   }
 
-  // Minimal API (existing + position endpoint)
+  // core API (existing UI + endpoints)
   initializeApi(app, server, io, userDataManager, logger, globalSettings);
 
-  // Position polling endpoint (idempotent if already present)
+  // position endpoint
   app.get('/api/position', (req, res) => {
-    try {
-      const pos = userDataManager.getLocalPosition && userDataManager.getLocalPosition();
-      if (!pos) return res.status(404).json({ code: 1, msg: 'no position' });
-      res.json({ code: 0, pos });
-    } catch (e) {
-      res.status(500).json({ code: 2, msg: String(e) });
-    }
+    const pos = userDataManager.getLocalPosition && userDataManager.getLocalPosition();
+    if (!pos) return res.status(404).json({ code: 1, msg: 'no position' });
+    res.json({ code: 0, pos });
   });
 
-  // Adapter management
+  // adapter listing
   app.get('/api/adapters', (req, res) => {
     try {
       const list = Cap.deviceList().map((d, i) => ({
@@ -126,7 +121,7 @@ async function main() {
     }
   });
 
-  let sniffer = new Sniffer({ logger: snifferLogger, userDataManager });
+  let sniffer = new Sniffer({ logger, userDataManager });
 
   async function switchAdapter(idx) {
     try {
@@ -134,10 +129,10 @@ async function main() {
         await sniffer.switchDevice(idx, PacketProcessor);
       } else {
         if (typeof sniffer.stop === 'function') { try { sniffer.stop(); } catch(_){} }
-        if (!(sniffer instanceof Sniffer)) sniffer = new Sniffer({ logger: snifferLogger, userDataManager });
+        sniffer = new Sniffer({ logger, userDataManager });
         await sniffer.start(idx, PacketProcessor);
       }
-      logger.info(`Switched adapter to index ${idx}`);
+      logger.info(`Switched adapter -> ${idx}`);
       return true;
     } catch (e) {
       logger.error(`Switch failed: ${e.message}`);
@@ -145,6 +140,7 @@ async function main() {
     }
   }
 
+  // adapter select (UI posts here; /adapter.html is the page)
   app.post('/api/adapter', async (req, res) => {
     try {
       const { index, name } = req.body || {};
@@ -160,7 +156,7 @@ async function main() {
     }
   });
 
-  // Port + default adapter
+  // port + device args
   const args = process.argv.slice(2);
   let server_port = 8989;
   if (args[0] && /^\d+$/.test(args[0])) server_port = parseInt(args[0], 10);
@@ -180,9 +176,7 @@ async function main() {
   setInterval(() => {
     try { userDataManager.checkTimeoutClear && userDataManager.checkTimeoutClear(); } catch(_) {}
   }, 10000);
-}
-
-main().catch(e => {
+})().catch(e => {
   console.error('Fatal:', e);
   process.exit(1);
 });
