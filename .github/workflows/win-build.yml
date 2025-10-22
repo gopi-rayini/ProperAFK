@@ -1,0 +1,41 @@
+name: Win EXE
+on: workflow_dispatch
+
+jobs:
+  build:
+    runs-on: windows-latest
+    env:
+      NODE_VERSION: '20.16.0'
+      PYTHON_VERSION: '3.10'
+      NPCAP_DIR: 'C:\npcap-sdk'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: ${{ env.NODE_VERSION }} }
+      - uses: actions/setup-python@v5
+        with: { python-version: ${{ env.PYTHON_VERSION }} }
+      - name: Install Npcap SDK
+        shell: powershell
+        run: |
+          $url = "https://nmap.org/npcap/dist/npcap-sdk-1.13.zip"
+          $zip = "$env:RUNNER_TEMP\npcap.zip"
+          Invoke-WebRequest $url -OutFile $zip
+          Expand-Archive $zip -DestinationPath C:\ -Force
+          Rename-Item "C:\npcap-sdk-1.13" "C:\npcap-sdk"
+          echo "INCLUDE=$env:NPCAP_DIR\Include;$env:INCLUDE" >> $env:GITHUB_ENV
+          echo "LIB=$env:NPCAP_DIR\Lib\x64;$env:LIB"       >> $env:GITHUB_ENV
+      - name: Configure node-gyp
+        run: |
+          echo msvs_version=2022>> %USERPROFILE%\.npmrc
+          echo python=${{ steps.setup-python.outputs.python-path }}>> %USERPROFILE%\.npmrc
+      - name: Install deps
+        run: npm ci
+      - name: Build EXE
+        run: npm run dist
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: bpsr-meter-win
+          path: |
+            dist/*.exe
+            dist/win-unpacked/**
