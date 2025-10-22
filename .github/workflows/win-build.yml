@@ -1,6 +1,7 @@
 name: Win EXE
 on:
-  workflow_dispatch:
+  push:
+    branches: [ "dev" , "main"]
 
 jobs:
   build:
