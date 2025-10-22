@@ -28,34 +28,47 @@ jobs:
       - name: Install Npcap SDK
         shell: powershell
         run: |
-          $ErrorActionPreference='Stop'
-          $urls=@(
+          $ErrorActionPreference = 'Stop'
+          $urls = @(
             'https://npcap.com/dist/npcap-sdk-latest.zip',
             'https://nmap.org/npcap/dist/npcap-sdk-1.13.zip'
           )
-          $zip="$env:RUNNER_TEMP\npcap.zip"
-          $dst=Join-Path $env:RUNNER_TEMP 'npcap'
+          $zip = "$env:RUNNER_TEMP\npcap.zip"
+          $dst = Join-Path $env:RUNNER_TEMP 'npcap'
           New-Item -ItemType Directory -Force -Path $dst | Out-Null
-          foreach($u in $urls){
-            try{
+          
+          $ok = $false
+          foreach ($u in $urls) {
+            try {
+              Write-Host "Downloading $u"
               Invoke-WebRequest -Uri $u -OutFile $zip -Headers @{ 'User-Agent'='Mozilla/5.0' }
               Expand-Archive -Path $zip -DestinationPath $dst -Force
+              $ok = $true
               break
             } catch {
-              if(Test-Path $zip){ Remove-Item $zip -Force }
+              if (Test-Path $zip) { Remove-Item $zip -Force }
+              Write-Host "Attempt failed: $($_.Exception.Message)"
             }
           }
+          if (-not $ok) { throw 'Download failed' }
+          
           $root = Get-ChildItem $dst -Recurse -Directory |
                   Where-Object {
                     Test-Path (Join-Path $_.FullName 'Include\pcap.h') -or
                     Test-Path (Join-Path $_.FullName 'Include\pcap\pcap.h')
                   } | Select-Object -First 1
-          if(-not $root){
+          if (-not $root) {
             Get-ChildItem $dst -Recurse | Format-List FullName
             throw 'Npcap SDK not found'
           }
+          
           $lib64 = Join-Path $root.FullName 'Lib\x64'
-          $lib   = (Test-Path $lib64) ? $lib64 : (Join-Path $root.FullName 'Lib')
+          if (Test-Path $lib64) {
+            $lib = $lib64
+          } else {
+            $lib = Join-Path $root.FullName 'Lib'
+          }
+          
           Add-Content -Path $env:GITHUB_ENV -Value "NPCAP_SDK_ROOT=$($root.FullName)"
           Add-Content -Path $env:GITHUB_ENV -Value "INCLUDE=$($root.FullName)\Include;$env:INCLUDE"
           Add-Content -Path $env:GITHUB_ENV -Value "LIB=$lib;$env:LIB"
