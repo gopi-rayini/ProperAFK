@@ -28,37 +28,37 @@ jobs:
       - name: Install Npcap SDK
         shell: powershell
         run: |
-          $ErrorActionPreference = 'Stop'
-          $urls = @(
-            'https://npcap.com/dist/npcap-sdk-1.15.zip',
-            'https://npcap.com/dist/npcap-sdk-1.13.zip'
+          $ErrorActionPreference='Stop'
+          $urls=@(
+            'https://npcap.com/dist/npcap-sdk-latest.zip',
+            'https://nmap.org/npcap/dist/npcap-sdk-1.13.zip'
           )
-          $zip = "$env:RUNNER_TEMP\npcap.zip"
-          foreach ($u in $urls) {
-            try {
-              Write-Host "Downloading $u"
-              Invoke-WebRequest -Uri $u -OutFile $zip
-              if ((Get-Item $zip).Length -lt 100000) { throw "download too small" }
-              Expand-Archive -Path $zip -DestinationPath $env:RUNNER_TEMP -Force
-              $folder = Get-ChildItem $env:RUNNER_TEMP -Directory |
-                        Where-Object { $_.Name -like 'npcap-sdk*' } |
-                        Select-Object -First 1
-              if ($folder) {
-                if (Test-Path 'C:\npcap-sdk') { Remove-Item -Recurse -Force 'C:\npcap-sdk' }
-                Move-Item -Force $folder.FullName 'C:\npcap-sdk'
-                break
-              } else {
-                throw "sdk folder not found"
-              }
+          $zip="$env:RUNNER_TEMP\npcap.zip"
+          $dst=Join-Path $env:RUNNER_TEMP 'npcap'
+          New-Item -ItemType Directory -Force -Path $dst | Out-Null
+          foreach($u in $urls){
+            try{
+              Invoke-WebRequest -Uri $u -OutFile $zip -Headers @{ 'User-Agent'='Mozilla/5.0' }
+              Expand-Archive -Path $zip -DestinationPath $dst -Force
+              break
             } catch {
-              Write-Host "Attempt failed: $($_.Exception.Message)"
-              if (Test-Path $zip) { Remove-Item $zip -Force }
+              if(Test-Path $zip){ Remove-Item $zip -Force }
             }
           }
-          if (-not (Test-Path 'C:\npcap-sdk\Include')) { throw 'Npcap SDK install failed' }
-          Add-Content -Path $env:GITHUB_ENV -Value "INCLUDE=C:\npcap-sdk\Include;$env:INCLUDE"
-          Add-Content -Path $env:GITHUB_ENV -Value "LIB=C:\npcap-sdk\Lib\x64;$env:LIB"
-
+          $root = Get-ChildItem $dst -Recurse -Directory |
+                  Where-Object {
+                    Test-Path (Join-Path $_.FullName 'Include\pcap.h') -or
+                    Test-Path (Join-Path $_.FullName 'Include\pcap\pcap.h')
+                  } | Select-Object -First 1
+          if(-not $root){
+            Get-ChildItem $dst -Recurse | Format-List FullName
+            throw 'Npcap SDK not found'
+          }
+          $lib64 = Join-Path $root.FullName 'Lib\x64'
+          $lib   = (Test-Path $lib64) ? $lib64 : (Join-Path $root.FullName 'Lib')
+          Add-Content -Path $env:GITHUB_ENV -Value "NPCAP_SDK_ROOT=$($root.FullName)"
+          Add-Content -Path $env:GITHUB_ENV -Value "INCLUDE=$($root.FullName)\Include;$env:INCLUDE"
+          Add-Content -Path $env:GITHUB_ENV -Value "LIB=$lib;$env:LIB"
 
       - name: Configure node-gyp
         shell: powershell
