@@ -29,23 +29,33 @@ jobs:
         shell: powershell
         run: |
           $ErrorActionPreference = 'Stop'
-          $url  = 'https://nmap.org/npcap/dist/npcap-sdk-1.13.zip'
-          $zip  = "$env:RUNNER_TEMP\npcap.zip"
-          Invoke-WebRequest -Uri $url -OutFile $zip
-          Expand-Archive -Path $zip -DestinationPath $env:RUNNER_TEMP -Force
-          
-          # find whatever folder name was inside the zip (e.g., npcap-sdk-1.13, 1.14, etc.)
-          $folder = Get-ChildItem $env:RUNNER_TEMP -Directory |
-                    Where-Object { $_.Name -like 'npcap-sdk*' } |
-                    Select-Object -First 1
-          if (-not $folder) {
-            Write-Host "DEBUG listing:"; Get-ChildItem $env:RUNNER_TEMP -Recurse
-            throw "Npcap SDK folder not found after unzip."
+          $urls = @(
+            'https://npcap.com/dist/npcap-sdk-1.15.zip',
+            'https://npcap.com/dist/npcap-sdk-1.13.zip'
+          )
+          $zip = "$env:RUNNER_TEMP\npcap.zip"
+          foreach ($u in $urls) {
+            try {
+              Write-Host "Downloading $u"
+              Invoke-WebRequest -Uri $u -OutFile $zip
+              if ((Get-Item $zip).Length -lt 100000) { throw "download too small" }
+              Expand-Archive -Path $zip -DestinationPath $env:RUNNER_TEMP -Force
+              $folder = Get-ChildItem $env:RUNNER_TEMP -Directory |
+                        Where-Object { $_.Name -like 'npcap-sdk*' } |
+                        Select-Object -First 1
+              if ($folder) {
+                if (Test-Path 'C:\npcap-sdk') { Remove-Item -Recurse -Force 'C:\npcap-sdk' }
+                Move-Item -Force $folder.FullName 'C:\npcap-sdk'
+                break
+              } else {
+                throw "sdk folder not found"
+              }
+            } catch {
+              Write-Host "Attempt failed: $($_.Exception.Message)"
+              if (Test-Path $zip) { Remove-Item $zip -Force }
+            }
           }
-          
-          if (Test-Path 'C:\npcap-sdk') { Remove-Item -Recurse -Force 'C:\npcap-sdk' }
-          Move-Item $folder.FullName 'C:\npcap-sdk'
-          
+          if (-not (Test-Path 'C:\npcap-sdk\Include')) { throw 'Npcap SDK install failed' }
           Add-Content -Path $env:GITHUB_ENV -Value "INCLUDE=C:\npcap-sdk\Include;$env:INCLUDE"
           Add-Content -Path $env:GITHUB_ENV -Value "LIB=C:\npcap-sdk\Lib\x64;$env:LIB"
 
