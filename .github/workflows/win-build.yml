@@ -18,11 +18,20 @@ jobs:
         with:
           node-version: ${{ env.NODE_VERSION }}
 
-      - name: Setup Python for node-gyp
+      - name: Setup Python
         id: py
         uses: actions/setup-python@v5
         with:
-          python-version: ${{ env:PYTHON_VERSION }}
+          python-version: ${{ env.PYTHON_VERSION }}
+
+      - name: Detect project dir
+        id: detect
+        shell: powershell
+        run: |
+          $pkg = Get-ChildItem -Path $env:GITHUB_WORKSPACE -Recurse -File -Filter package.json | Select-Object -First 1
+          if (-not $pkg) { throw 'package.json not found' }
+          $dir = Split-Path $pkg.FullName -Parent
+          "WD=$dir" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
 
       - name: Install Npcap SDK
         shell: powershell
@@ -53,9 +62,9 @@ jobs:
           if (-not $root) { throw 'Npcap SDK not found' }
           $lib64 = Join-Path $root 'Lib\x64'
           if (Test-Path $lib64) { $lib = $lib64 } else { $lib = Join-Path $root 'Lib' }
-          Add-Content -Path $env:GITHUB_ENV -Value "NPCAP_SDK_ROOT=$root"
-          Add-Content -Path $env:GITHUB_ENV -Value "INCLUDE=$root\Include;$env:INCLUDE"
-          Add-Content -Path $env:GITHUB_ENV -Value "LIB=$lib;$env:LIB"
+          Add-Content -Path $env:GITHUB_ENV -Value ("NPCAP_SDK_ROOT={0}" -f $root)
+          Add-Content -Path $env:GITHUB_ENV -Value ("INCLUDE={0}\Include;{1}" -f $root,$env:INCLUDE)
+          Add-Content -Path $env:GITHUB_ENV -Value ("LIB={0};{1}" -f $lib,$env:LIB)
 
       - name: Configure node-gyp env
         run: echo ok
@@ -64,9 +73,11 @@ jobs:
           npm_config_python: ${{ steps.py.outputs.python-path }}
 
       - name: Install deps
+        working-directory: ${{ env.WD }}
         run: npm install --no-audit --no-fund
 
       - name: Build EXE
+        working-directory: ${{ env.WD }}
         run: npm run dist
 
       - name: Upload artifacts
@@ -74,5 +85,5 @@ jobs:
         with:
           name: bpsr-meter-win
           path: |
-            dist/**/*.exe
-            dist/win-unpacked/**
+            ${{ env.WD }}/dist/**/*.exe
+            ${{ env.WD }}/dist/win-unpacked/**
