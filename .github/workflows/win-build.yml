@@ -1,15 +1,14 @@
+
 name: Win EXE
 on:
   push:
     branches: [ "dev" , "main"]
-
 jobs:
   build:
     runs-on: windows-latest
     env:
       NODE_VERSION: '20.16.0'
       PYTHON_VERSION: '3.10'
-      NPCAP_DIR: 'C:\npcap-sdk'
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -19,13 +18,13 @@ jobs:
         with:
           node-version: ${{ env.NODE_VERSION }}
 
-      - name: Setup Python
+      - name: Setup Python for node-gyp
         id: py
         uses: actions/setup-python@v5
         with:
           python-version: ${{ env.PYTHON_VERSION }}
-          
-      - name: Install Npcap SDK
+
+      - name: Install Npcap SDK (robust)
         shell: powershell
         run: |
           $ErrorActionPreference = 'Stop'
@@ -36,7 +35,7 @@ jobs:
           $zip = "$env:RUNNER_TEMP\npcap.zip"
           $dst = Join-Path $env:RUNNER_TEMP 'npcap'
           New-Item -ItemType Directory -Force -Path $dst | Out-Null
-          
+
           $downloaded = $false
           foreach ($u in $urls) {
             try {
@@ -51,34 +50,36 @@ jobs:
             }
           }
           if (-not $downloaded) { throw 'Download failed' }
-          
-          $root = Get-ChildItem $dst -Recurse -Directory | ForEach-Object {
-            $c1 = Join-Path $_.FullName 'Include\pcap.h'
-            $c2 = Join-Path $_.FullName 'Include\pcap\pcap.h'
-            if (Test-Path $c1 -or Test-Path $c2) { $_ }
-          } | Select-Object -First 1
-          
+
+          # find root folder by locating pcap.h under Include
+          $files = Get-ChildItem -Path $dst -Recurse -File -Filter pcap.h
+          $root = $null
+          foreach ($f in $files) {
+            $inc = Split-Path $f.FullName -Parent
+            if ($inc -match '\\Include(\\pcap)?$') {
+              $root = Split-Path $inc -Parent
+              break
+            }
+          }
           if (-not $root) {
-            Write-Host 'Listing extracted files for debugging:'
+            Write-Host 'Listing extracted files:'
             Get-ChildItem $dst -Recurse | Select-Object FullName
             throw 'Npcap SDK not found'
           }
-          
-          $lib64 = Join-Path $root.FullName 'Lib\x64'
-          $lib = (Test-Path $lib64) ? $lib64 : (Join-Path $root.FullName 'Lib')
-          
-          # Avoid PowerShell ternary in older shells
-          if (Test-Path $lib64) { $lib = $lib64 } else { $lib = Join-Path $root.FullName 'Lib' }
-          
-          Add-Content -Path $env:GITHUB_ENV -Value "NPCAP_SDK_ROOT=$($root.FullName)"
-          Add-Content -Path $env:GITHUB_ENV -Value "INCLUDE=$($root.FullName)\Include;$env:INCLUDE"
+
+          $lib64 = Join-Path $root 'Lib\x64'
+          if (Test-Path $lib64) { $lib = $lib64 } else { $lib = Join-Path $root 'Lib' }
+
+          Add-Content -Path $env:GITHUB_ENV -Value "NPCAP_SDK_ROOT=$root"
+          Add-Content -Path $env:GITHUB_ENV -Value "INCLUDE=$root\Include;$env:INCLUDE"
           Add-Content -Path $env:GITHUB_ENV -Value "LIB=$lib;$env:LIB"
 
-      - name: Configure node-gyp
-        shell: powershell
-        run: |
-          Add-Content -Path "$env:USERPROFILE\.npmrc" -Value "msvs_version=2022"
-          Add-Content -Path "$env:USERPROFILE\.npmrc" -Value "python=${{ steps.py.outputs.python-path }}"
+      - name: Configure node-gyp env
+        # prefer env vars over npm config on npm 10
+        run: echo ok
+        env:
+          npm_config_msvs_version: '2022'
+          npm_config_python: ${{ steps.py.outputs.python-path }}
 
       - name: Install deps
         run: npm ci
