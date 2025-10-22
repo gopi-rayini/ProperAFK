@@ -75,6 +75,30 @@ jobs:
       - name: Install deps
         working-directory: ${{ env.WD }}
         run: npm install --no-audit --no-fund
+      - name: Ensure Windows icon (256x256 .ico)
+        shell: powershell
+        working-directory: ${{ env.WD }}
+        run: |
+          $ErrorActionPreference='Stop'
+          # Install ImageMagick
+          choco install imagemagick -y --no-progress
+          refreshenv | Out-Null
+
+          # Pick a source PNG if present, else create one
+          $srcs = @('public\icon.png','icon.png','assets\icon.png')
+          $src = $null
+          foreach($s in $srcs){ if(Test-Path $s){ $src = $s; break } }
+          if(-not $src){
+            magick -size 256x256 canvas:none -fill "#0B6E4F" -draw "roundrectangle 0,0 255,255 48,48" `
+                   -fill white -gravity center -pointsize 88 -annotate 0 "B" icon-256.png
+          } else {
+            magick convert "$src" -resize 256x256 -background none -gravity center -extent 256x256 icon-256.png
+          }
+
+          # Build multi-size ICO and place at project root
+          magick convert icon-256.png -define icon:auto-resize=256,128,64,48,32,16 icon.ico
+
+          if(-not (Test-Path "icon.ico")){ throw "icon.ico not created" }
 
       - name: Build EXE
         working-directory: ${{ env.WD }}
