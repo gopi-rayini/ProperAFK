@@ -1,10 +1,10 @@
-const winston = require('winston');
 const path = require('path');
-const fsPromises = require('fs').promises;
 const fs = require('fs');
+const fsPromises = fs.promises;
 const express = require('express');
 const http = require('http');
 const { Server } = require('socket.io');
+const winston = require('winston');
 const { Cap } = require('cap');
 const zlib = require('zlib');
 
@@ -31,11 +31,10 @@ async function loadSettings() {
   try {
     if (fs.existsSync(SETTINGS_PATH)) {
       const raw = await fsPromises.readFile(SETTINGS_PATH, 'utf8');
-      const json = JSON.parse(raw);
-      Object.assign(globalSettings, json || {});
+      Object.assign(globalSettings, JSON.parse(raw) || {});
     }
   } catch (e) {
-    console.log('Failed to load settings.json, using defaults:', e.message);
+    console.log('settings.json load failed:', e.message);
   }
 }
 
@@ -43,7 +42,7 @@ async function saveSettings() {
   try {
     await fsPromises.writeFile(SETTINGS_PATH, JSON.stringify(globalSettings, null, 2), 'utf8');
   } catch (e) {
-    console.log('Failed to save settings.json:', e.message);
+    console.log('settings.json save failed:', e.message);
   }
 }
 
@@ -53,46 +52,66 @@ function makeLogger() {
     format: winston.format.combine(
       winston.format.colorize({ all: true }),
       winston.format.timestamp({ format: 'YYYY-MM-DD HH:mm:ss' }),
-      winston.format.printf((info) => `[${info.timestamp}] [${info.level}] ${info.message}`)
+      winston.format.printf(i => `[${i.timestamp}] [${i.level}] ${i.message}`)
     ),
     transports: [new winston.transports.Console()]
   });
 }
 
-async function main() {
-  const logger = makeLogger();
+// provide .info/.warn/.error/.debug always
+function normalizeLogger(lg) {
+  const noop = () => {};
+  return {
+    info:  (lg && lg.info)  ? lg.info.bind(lg)  : console.log.bind(console),
+    warn:  (lg && lg.warn)  ? lg.warn.bind(lg)  : console.warn.bind(console),
+    error: (lg && lg.error) ? lg.error.bind(lg) : console.error.bind(console),
+    debug: (lg && lg.debug) ? lg.debug.bind(lg) : noop
+  };
+}
 
+async function main() {
   if (!zlib.zstdDecompressSync) {
-    console.log('zstdDecompressSync is not available! Please update your Node.js!');
+    console.log('zstdDecompressSync missing. Update Node/Electron.');
     process.exit(1);
   }
 
   await loadSettings();
 
-  const userDataManager = new UserDataManager(logger);
-  let sniffer = new Sniffer({ logger, userDataManager });
-
-  // args: [port] [deviceIndex]
-  const args = process.argv.slice(2);
-  let server_port = 8989;
-  let deviceIdxFromArgs = undefined;
-  if (args[0] && /^\d+$/.test(args[0])) server_port = parseInt(args[0], 10);
-  if (args[1] && /^\d+$/.test(args[1])) deviceIdxFromArgs = parseInt(args[1], 10);
-
-  // prefer saved adapter
-  let deviceIdx = (globalSettings.selectedDevice !== undefined) ? globalSettings.selectedDevice : deviceIdxFromArgs;
-
   const app = express();
   const server = http.createServer(app);
-  const io = new Server(server, {
-    cors: { origin: '*', methods: ['GET', 'POST'] }
-  });
+  const io = new Server(server, { cors: { origin: '*', methods: ['GET','POST'] } });
+  app.use(express.static(path.join(__dirname, 'public')));
+  app.use(express.json());
 
-  // core API (UI, stats, position endpoint, etc.)
+  const logger = makeLogger();
+  const snifferLogger = normalizeLogger(logger);
+
+  // User data manager + ensure settings + position helpers
+  const userDataManager = new UserDataManager(logger);
+  userDataManager.globalSettings = userDataManager.globalSettings || globalSettings; // inject so checkTimeoutClear works
+  const nowMs = () => Date.now();
+  if (typeof userDataManager.setLocalPosition !== 'function') {
+    userDataManager.setLocalPosition = function(pos){ this.localPosition = { ...pos, ts: nowMs() }; };
+  }
+  if (typeof userDataManager.getLocalPosition !== 'function') {
+    userDataManager.getLocalPosition = function(){ return this.localPosition || null; };
+  }
+
+  // Minimal API (existing + position endpoint)
   initializeApi(app, server, io, userDataManager, logger, globalSettings);
 
-  // ===== Adapter selection API =====
-  // GET /api/adapters -> list NICs on this machine
+  // Position polling endpoint (idempotent if already present)
+  app.get('/api/position', (req, res) => {
+    try {
+      const pos = userDataManager.getLocalPosition && userDataManager.getLocalPosition();
+      if (!pos) return res.status(404).json({ code: 1, msg: 'no position' });
+      res.json({ code: 0, pos });
+    } catch (e) {
+      res.status(500).json({ code: 2, msg: String(e) });
+    }
+  });
+
+  // Adapter management
   app.get('/api/adapters', (req, res) => {
     try {
       const list = Cap.deviceList().map((d, i) => ({
@@ -107,65 +126,63 @@ async function main() {
     }
   });
 
-  // POST /api/adapter { index?:number, name?:string } -> switch capture interface
-  app.use(express.json());
-  app.post('/api/adapter', async (req, res) => {
-    try {
-      const { index, name } = req.body || {};
-      const list = Cap.deviceList();
-      let idx = Number.isInteger(index) ? index : list.findIndex(x => x.name === name);
-      if (!(idx >= 0 && idx < list.length)) return res.status(400).json({ code: 1, msg: 'invalid index/name' });
-
-      const live = await switchAdapter(idx);
-      globalSettings.selectedDevice = idx;
-      await saveSettings();
-
-      res.json({ code: 0, live, selected: idx });
-    } catch (e) {
-      res.status(500).json({ code: 2, msg: String(e) });
-    }
-  });
+  let sniffer = new Sniffer({ logger: snifferLogger, userDataManager });
 
   async function switchAdapter(idx) {
     try {
       if (typeof sniffer.switchDevice === 'function') {
         await sniffer.switchDevice(idx, PacketProcessor);
-      } else if (typeof sniffer.stop === 'function') {
-        try { sniffer.stop(); } catch (_) {}
-        await sniffer.start(idx, PacketProcessor);
       } else {
-        // fallback: replace instance
-        try { sniffer.cap && sniffer.cap.close && sniffer.cap.close(); } catch (_) {}
-        sniffer = new Sniffer({ logger, userDataManager });
+        if (typeof sniffer.stop === 'function') { try { sniffer.stop(); } catch(_){} }
+        if (!(sniffer instanceof Sniffer)) sniffer = new Sniffer({ logger: snifferLogger, userDataManager });
         await sniffer.start(idx, PacketProcessor);
       }
-      logger.info(`Switched capture to adapter index ${idx}`);
+      logger.info(`Switched adapter to index ${idx}`);
       return true;
     } catch (e) {
       logger.error(`Switch failed: ${e.message}`);
       return false;
     }
   }
-  // ===== End adapter selection API =====
+
+  app.post('/api/adapter', async (req, res) => {
+    try {
+      const { index, name } = req.body || {};
+      const list = Cap.deviceList();
+      let idx = Number.isInteger(index) ? index : list.findIndex(x => x.name === name);
+      if (!(idx >= 0 && idx < list.length)) return res.status(400).json({ code: 1, msg: 'invalid index/name' });
+      const live = await switchAdapter(idx);
+      globalSettings.selectedDevice = idx;
+      await saveSettings();
+      res.json({ code: 0, live, selected: idx });
+    } catch (e) {
+      res.status(500).json({ code: 2, msg: String(e) });
+    }
+  });
+
+  // Port + default adapter
+  const args = process.argv.slice(2);
+  let server_port = 8989;
+  if (args[0] && /^\d+$/.test(args[0])) server_port = parseInt(args[0], 10);
+  const deviceIdxFromArgs = (args[1] && /^\d+$/.test(args[1])) ? parseInt(args[1], 10) : undefined;
+  const deviceIdx = (globalSettings.selectedDevice !== undefined) ? globalSettings.selectedDevice : deviceIdxFromArgs;
 
   server.listen(server_port, '0.0.0.0', () => {
-    const localUrl = `http://localhost:${server_port}`;
-    console.log(`Server running at ${localUrl}`);
+    console.log(`Server running at http://localhost:${server_port}`);
   });
 
   try {
     await sniffer.start(deviceIdx, PacketProcessor);
-  } catch (error) {
-    logger.error(`Error starting sniffer: ${error.message}`);
+  } catch (e) {
+    logger.error(`Error starting sniffer: ${e.message}`);
   }
 
-  // maintenance
   setInterval(() => {
-    userDataManager.checkTimeoutClear();
+    try { userDataManager.checkTimeoutClear && userDataManager.checkTimeoutClear(); } catch(_) {}
   }, 10000);
 }
 
-main().catch((e) => {
+main().catch(e => {
   console.error('Fatal:', e);
   process.exit(1);
 });
