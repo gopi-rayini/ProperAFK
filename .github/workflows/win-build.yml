@@ -102,7 +102,16 @@ jobs:
 
       - name: Build EXE
         working-directory: ${{ env.WD }}
-        run: npm run dist
+        run: npx electron-builder --win --x64 --config.directories.output=dist
+
+      - name: List outputs (debug)
+        shell: powershell
+        working-directory: ${{ env.WD }}
+        run: |
+          Write-Host "== dist =="
+          if (Test-Path dist) { Get-ChildItem dist -Recurse | Select FullName } else { Write-Host "none" }
+          Write-Host "== dist_electron =="
+          if (Test-Path dist_electron) { Get-ChildItem dist_electron -Recurse | Select FullName } else { Write-Host "none" }
 
       - name: Upload artifacts
         uses: actions/upload-artifact@v4
@@ -111,3 +120,5 @@ jobs:
           path: |
             ${{ env.WD }}/dist/**/*.exe
             ${{ env.WD }}/dist/win-unpacked/**
+            ${{ env.WD }}/dist_electron/**/*.exe
+            ${{ env.WD }}/dist_electron/win-unpacked/**
