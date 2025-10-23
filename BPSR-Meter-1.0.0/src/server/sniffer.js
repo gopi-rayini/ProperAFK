@@ -4,13 +4,13 @@ const PROTOCOL = decoders.PROTOCOL;
 const Readable = require('stream').Readable;
 const findDefaultNetworkDevice = require('../../algo/netInterfaceUtil'); // Ajustar la ruta
 const { Lock } = require('./dataManager'); // Importar Lock desde dataManager
-const fs = require('fs');
-const rawLog = fs.createWriteStream('logs/raw_packets.txt', { flags: 'a' });
+
 
 const Cap = cap.Cap;
 
 const NPCAP_INSTALLER_PATH = require('path').join(__dirname, '..', '..', 'Dist', 'npcap-1.83.exe'); // Ajustar la ruta
 const fs = require('fs');
+const rawLog = fs.createWriteStream('logs/raw_packets.txt', { flags: 'a' });
 const { spawn } = require('child_process');
 
 async function checkAndInstallNpcap(logger) {
